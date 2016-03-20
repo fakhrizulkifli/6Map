@@ -36,10 +36,6 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
-#include "logger.h"
-#include "neighbor.h"
-#include "utils.h"
-#include "6map.h"
 
 #include <netdb.h>
 #include <arpa/inet.h>
@@ -52,9 +48,13 @@
 #include <sys/ioctl.h>
 #include <bits/ioctls.h>
 #include <bits/socket.h>
+#include "logger.h"
+#include "neighbor.h"
+#include "utils.h"
+#include "6map.h"
 
 struct msghdr
-neighbor_solicit(struct _neighbor neigh, struct _idata idata, struct _scan scan)
+neighbor_solicit(struct _neighbor *neigh, struct _idata *idata, struct _scan *scan)
 {
     int i;
     int cmsglen;
@@ -67,25 +67,27 @@ neighbor_solicit(struct _neighbor neigh, struct _idata idata, struct _scan scan)
     int NS_HDRLEN = sizeof(struct nd_neighbor_solicit);
     struct sockaddr_in6 *ipv6, src, dst, dstsnmc;
 
-    neigh.outpack = allocate_ustrmem(IP_MAXPACKET);
-    neigh.psdhdr = allocate_ustrmem(IP_MAXPACKET);
+    neigh = malloc(sizeof *neigh);
+    init_neighbor(neigh);
+    neigh->outpack = allocate_ustrmem(IP_MAXPACKET);
+    neigh->psdhdr = allocate_ustrmem(IP_MAXPACKET);
 
-    if (resolve_addr(scan.src_ip) == 0)
+    if (resolve_addr(idata->iface_ip) == 0)
     {
-        memset(&src, 0, sizeof(struct sockaddr_in6));
-        memcpy(&src, scan.src_ip, sizeof(socklen_t));
-        memcpy(&neigh.psdhdr, scan.src_ip, 16 * sizeof(u_int8_t));
+        memset(&src, 0, sizeof(src));
+        memcpy(&src, scan->target, sizeof(socklen_t));
+        memcpy(&neigh->psdhdr, scan->target, 16 * sizeof(u_int8_t));
     }
 
-    if (resolve_addr(scan.dst_ip) == 0)
+    if (resolve_addr(scan->target) == 0)
     {
-        memset(&dst, 0, sizeof(struct sockaddr_in6));
-        memset(&dstsnmc, 0, sizeof(struct sockaddr_in6));
-        memcpy(&dst, scan.dst_ip, sizeof(socklen_t));
-        memcpy(&dstsnmc, scan.dst_ip, sizeof(socklen_t));
+        memset(&dst, 0, sizeof(dst));
+        memset(&dstsnmc, 0, sizeof(dstsnmc));
+        memcpy(&dst, scan->target, sizeof(socklen_t));
+        memcpy(&dstsnmc, scan->target, sizeof(socklen_t));
     }
 
-    LOG(1, "Target Unicast IPv6 address: %s\n", scan.dst_ip);
+    LOG(1, "Target Unicast IPv6 address: %s\n", scan->target);
 
     dstsnmc.sin6_addr.s6_addr[0] = 255;
     dstsnmc.sin6_addr.s6_addr[1] = 2;
@@ -99,16 +101,16 @@ neighbor_solicit(struct _neighbor neigh, struct _idata idata, struct _scan scan)
     /* FIXME: solicited-node address wrong calculation */
     ipv6 = (struct sockaddr_in6 *) &dstsnmc;
     //memset(scan.dst_ip, 0, sizeof(struct _neighbor));
-    if (inet_ntop(AF_INET6, &(ipv6->sin6_addr), scan.dst_ip, INET6_ADDRSTRLEN) == NULL)
+    if (inet_ntop(AF_INET6, &(ipv6->sin6_addr), scan->target, INET6_ADDRSTRLEN) == NULL)
     {
         perror("Neighbor.inet_ntop");
         exit(EXIT_FAILURE);
     }
 
-    LOG(1, "Target Solicited-Node Multicast address: %s\n", scan.dst_ip);
-    memcpy(&neigh.psdhdr + 16, dstsnmc.sin6_addr.s6_addr, 16 * sizeof(u_int8_t));
+    LOG(1, "Target Solicited-Node Multicast address: %s\n", scan->target);
+    memcpy(&neigh->psdhdr + 16, dstsnmc.sin6_addr.s6_addr, 16 * sizeof(u_int8_t));
 
-    ns = (struct nd_neighbor_solicit *) &neigh.outpack;
+    ns = (struct nd_neighbor_solicit *) &neigh->outpack;
     memset(ns, 0 ,sizeof(struct nd_neighbor_solicit));
 
     ns->nd_ns_hdr.icmp6_type = ND_NEIGHBOR_SOLICIT;
@@ -116,15 +118,15 @@ neighbor_solicit(struct _neighbor neigh, struct _idata idata, struct _scan scan)
     ns->nd_ns_hdr.icmp6_cksum = htons(0);
     ns->nd_ns_target = dst.sin6_addr;
 
-    memcpy(&neigh.outpack + NS_HDRLEN, &idata.src_mac, 6 * sizeof(u_int8_t));
+    memcpy(&neigh->outpack + NS_HDRLEN, &idata->iface_mac, 6 * sizeof(u_int8_t));
 
     psdhdrlen = 16 + 16 + 4 + 3 + 1 + NS_HDRLEN + 6;
 
-    memset(&msghdr, 0, sizeof(struct msghdr));
+    memset(&msghdr, 0, sizeof(msghdr));
     msghdr.msg_name = &dstsnmc;
     msghdr.msg_namelen = sizeof(dstsnmc);
     memset(&iov, 0, sizeof(struct iovec));
-    iov[0].iov_base = (u_int8_t *) &neigh.outpack;
+    iov[0].iov_base = (u_int8_t *) &neigh->outpack;
     iov[0].iov_len = NS_HDRLEN + 6;
     msghdr.msg_iov = iov;
     msghdr.msg_iovlen = 1;
@@ -133,34 +135,34 @@ neighbor_solicit(struct _neighbor neigh, struct _idata idata, struct _scan scan)
     msghdr.msg_control = allocate_ustrmem(cmsglen);
     msghdr.msg_controllen = cmsglen;
 
-    neigh.hoplimit = 255u;
+    neigh->hoplimit = 255u;
     cmsghdr1 = CMSG_FIRSTHDR (&msghdr);
     cmsghdr1->cmsg_level = IPPROTO_IPV6;
     cmsghdr1->cmsg_type = IPV6_HOPLIMIT;
     cmsghdr1->cmsg_len = CMSG_LEN(sizeof(int));
-    *(CMSG_DATA (cmsghdr1)) = neigh.hoplimit;
+    *(CMSG_DATA (cmsghdr1)) = neigh->hoplimit;
 
     cmsghdr2 = CMSG_NXTHDR (&msghdr, cmsghdr1);
     cmsghdr2->cmsg_level = IPPROTO_IPV6;
     cmsghdr2->cmsg_type = IPV6_PKTINFO;
     cmsghdr2->cmsg_len = CMSG_LEN(sizeof(pktinfo));
     pktinfo = (struct _pktinfo6 *) CMSG_DATA(cmsghdr2);
-    pktinfo->ipi6_ifindex = idata.index;
+    pktinfo->ipi6_ifindex = idata->index;
 
-    neigh.psdhdr = malloc(sizeof(struct _neighbor));
-    neigh.psdhdr[32] = 0;
-    neigh.psdhdr[33] = 0;
-    neigh.psdhdr[34] = (NS_HDRLEN + 6) / 256;
-    neigh.psdhdr[35] = (NS_HDRLEN + 6) % 256;
-    neigh.psdhdr[36] = 0;
-    neigh.psdhdr[37] = 0;
-    neigh.psdhdr[38] = 0;
-    neigh.psdhdr[39] = IPPROTO_ICMPV6;
-    memcpy(&neigh.psdhdr + 40, &neigh.outpack, (NS_HDRLEN + 6) * sizeof(u_int8_t));
-    ns->nd_ns_hdr.icmp6_cksum = checksum((u_int16_t *) &neigh.psdhdr, psdhdrlen);
+    neigh->psdhdr[32] = 0;
+    neigh->psdhdr[33] = 0;
+    neigh->psdhdr[34] = (NS_HDRLEN + 6) / 256;
+    neigh->psdhdr[35] = (NS_HDRLEN + 6) % 256;
+    neigh->psdhdr[36] = 0;
+    neigh->psdhdr[37] = 0;
+    neigh->psdhdr[38] = 0;
+    neigh->psdhdr[39] = IPPROTO_ICMPV6;
+    memcpy(&neigh->psdhdr + 40, &neigh->outpack, (NS_HDRLEN + 6) * sizeof(u_int8_t));
+    ns->nd_ns_hdr.icmp6_cksum = checksum((u_int16_t *) &neigh->psdhdr, psdhdrlen);
 
-    LOG(1, "Checksum: %x\n", ntohs(ns->nd_ns_hdr.icmp6_cksum));
+    fprintf(stdout, "Checksum: %x\n", ntohs(ns->nd_ns_hdr.icmp6_cksum));
 
+    fflush(stdout);
     return msghdr;
 }
 

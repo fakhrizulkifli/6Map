@@ -2,6 +2,7 @@
 #define NEIGHBOR_H
 
 #include <netinet/in.h>
+#include "6map.h"
 
 struct _pktinfo6
 {
@@ -18,6 +19,6 @@ struct _neighbor
     u_int8_t hoplimit;
 };
 
-struct msghdr neighbor_solicit();
+struct msghdr neighbor_solicit(struct _neighbor *, struct _idata *, struct _scan *);
 
 #endif

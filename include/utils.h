@@ -1,10 +1,16 @@
 #ifndef UTILS_H
 #define UTILS_H
 
-struct _idata init_interface(struct _idata);
-int free_neighbor(struct _neighbor);
-int free_scan(struct _scan);
-int free_idata(struct _idata);
+#include "neighbor.h"
+#include "6map.h"
+
+int init_neighbor(struct _neighbor *);
+int init_idata(struct _idata *);
+int init_scan(struct _scan *);
+int init_interface(struct _idata *, struct _scan *);
+int free_neighbor(struct _neighbor *);
+int free_scan(struct _scan *);
+int free_idata(struct _idata *);
 void *find_ancillary(struct msghdr *, int);
 int validate_ip_addr(u_int8_t);
 int resolve_addr(char *);

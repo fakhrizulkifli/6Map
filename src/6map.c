@@ -39,11 +39,6 @@
 #include <unistd.h>
 #include <execinfo.h>
 #include <errno.h>
-#include "6map.h"
-#include "logger.h"
-#include "neighbor.h"
-#include "utils.h"
-#include "icmp6.h"
 
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -62,6 +57,12 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include "6map.h"
+#include "logger.h"
+#include "neighbor.h"
+#include "utils.h"
+#include "icmp6.h"
+
 
 #define TRACE_SIZE 256
 
@@ -69,9 +70,8 @@ const struct option opts[] =
 {
     {"help", no_argument, 0, 'h'},
     {"interface", required_argument, 0, 'i'},
-    {"destination", required_argument, 0, 'd'},
-    {"source", optional_argument, 0, 's'},
     {"ping", no_argument, 0, 'p'},
+    {"target", required_argument, 0, 't'},
     {"port", required_argument, 0, 'P'},
     {"router", no_argument, 0, 'r'},
     {"arp", no_argument, 0, 'a'},
@@ -146,27 +146,26 @@ sigint_handler(int sig)
  */
 
 int
-recv_neighbor_advert(struct _idata idata)
+recv_neighbor_advert(struct _neighbor *neigh, struct _idata *idata)
 {
     int i;
     int sd;
     int ret;
     int len;
     u_int8_t neigh_addr, *pkt;
-    struct _neighbor neigh;
     struct nd_neighbor_advert *na;
     struct msghdr msghdr;
     struct iovec iov[2];
     struct ifreq ifr;
 
-    neigh.inpack = allocate_ustrmem(IP_MAXPACKET);
+    neigh->inpack = allocate_ustrmem(IP_MAXPACKET);
 
-    memset(&iov, 0, sizeof(struct iovec));
-    memset(&msghdr, 0, sizeof(struct msghdr));
+    memset(&iov, 0, sizeof(iov));
+    memset(&msghdr, 0, sizeof(msghdr));
 
     msghdr.msg_name = NULL;
     msghdr.msg_namelen = 0;
-    iov[0].iov_base = (u_int8_t *) neigh.inpack;
+    iov[0].iov_base = (u_int8_t *) neigh->inpack;
     iov[0].iov_len = IP_MAXPACKET;
     msghdr.msg_iov = iov;
     msghdr.msg_iovlen = 1;
@@ -180,8 +179,8 @@ recv_neighbor_advert(struct _idata idata)
         exit(EXIT_FAILURE);
     }
 
-    memcpy(&ifr.ifr_name, &idata.iface, sizeof(ifr.ifr_name));
-    memcpy(&ifr.ifr_hwaddr.sa_data, &idata.src_mac, sizeof(ifr.ifr_hwaddr.sa_data));
+    memcpy(&ifr.ifr_name, &idata->iface, sizeof(ifr.ifr_name));
+    memcpy(&ifr.ifr_hwaddr.sa_data, &idata->iface_mac, sizeof(ifr.ifr_hwaddr.sa_data));
     if (bind(sd, (struct sockaddr *) &ifr, sizeof(ifr)) != 0)
     {
         perror("RecvNeighAdvert.bind");
@@ -196,7 +195,7 @@ recv_neighbor_advert(struct _idata idata)
      */
 
     // listening for incoming
-    na = (struct nd_neighbor_advert *) neigh.inpack;
+    na = (struct nd_neighbor_advert *) neigh->inpack;
     while (na->nd_na_hdr.icmp6_type != ND_NEIGHBOR_ADVERT)
     {
         if ((len = recvmsg(sd, &msghdr, 0)) < 0)
@@ -217,7 +216,7 @@ recv_neighbor_advert(struct _idata idata)
         LOG(1, "Neighbor Solicited address: %s\n", &na->nd_na_target);
         LOG(1, "Neighbor Solicited MAC address: ");
 
-        pkt = (u_int8_t *) neigh.inpack;
+        pkt = (u_int8_t *) neigh->inpack;
         for (i = 2; i < 7; ++i)
         {
             LOG(1, "%02x:", pkt[sizeof(struct nd_neighbor_advert) + i]);
@@ -247,15 +246,14 @@ recv_neighbor_advert(struct _idata idata)
  */
 
 int
-send_neighbor_solicit(struct _idata idata, struct _scan scan)
+send_neighbor_solicit(struct _idata *idata, struct _scan *scan)
 {
     int ret;
     int sd;
-    struct _neighbor neigh;
+    struct _neighbor *neigh;
     struct msghdr msghdr;
-    struct _idata dat;
 
-    memcpy(&dat, &idata, sizeof(struct _idata));
+    memset(&neigh, 0, sizeof(neigh));
     msghdr = neighbor_solicit(neigh, idata, scan);
 
     if ((sd = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6)) < 0)
@@ -273,7 +271,7 @@ send_neighbor_solicit(struct _idata idata, struct _scan scan)
         exit(EXIT_FAILURE);
     }
 
-    if ((ret = recv_neighbor_advert(dat)) != 0)
+    if ((ret = recv_neighbor_advert(neigh, idata)) != 0)
     {
         perror("SendNeighAdvert.recv_neighbor_advert");
         exit(EXIT_FAILURE);
@@ -302,15 +300,15 @@ main(int argc, char **argv)
 {
     int ret;
     int status;
-    u_int8_t port;
-    struct _idata dat, idata;
-    struct _scan scan;
-    struct sockaddr_in6 sa;
+    struct _idata *idata;
+    struct _scan *scan;
 
     signal(SIGINT, sigint_handler);
     signal(SIGSEGV, segfault_handler);
-    memset(&idata, 0, sizeof(struct _idata));
-    memset(&scan, 0, sizeof(struct _scan));
+    idata = malloc(sizeof *idata);
+    scan = malloc(sizeof *scan);
+    init_idata(idata);
+    init_scan(scan);
 
     if (argc < 2)
     {
@@ -318,7 +316,7 @@ main(int argc, char **argv)
         exit(EXIT_FAILURE);
     }
 
-    while ((ret = getopt_long(argc, argv, "hi:t:vVd:s:pP:ra", opts, NULL)) != -1)
+    while ((ret = getopt_long(argc, argv, "hi:t:vVpP:ra", opts, NULL)) != -1)
     {
         switch (ret)
         {
@@ -327,37 +325,27 @@ main(int argc, char **argv)
                 exit(EXIT_FAILURE);
 
             case 'i':
-                dat.iface = strdup(optarg);
+                idata->iface = strdup(optarg);
                 break;
 
-            case 'd':
-                if ((inet_pton(AF_INET6, optarg, &(sa.sin6_addr))) != 1)
-                {
-                    perror("inet_pton");
-                    exit(EXIT_FAILURE);
-                }
-                scan.dst_ip = strdup(optarg);
-                break;
-
-            case 's':
-                if ((inet_pton(AF_INET6, optarg, &(sa.sin6_addr))) != 1)
-                {
-                    perror("inet_pton");
-                    exit(EXIT_SUCCESS);
-                }
-                scan.src_ip = strdup(optarg);
+            case 't':
+                scan->target = strdup(optarg);
                 break;
 
             case 'p':
-                scan.ping_flag = 1;
+                scan->ping_flag = 1;
                 break;
 
             case 'P':
-                port = optarg;
+                scan->port = strdup(optarg);
                 break;
 
             case 'r':
-                scan.router_flag = 1;
+                scan->router_flag = 1;
+                break;
+
+            case 'a':
+                scan->arp_flag = 1;
                 break;
 
             case 'V':
@@ -369,8 +357,7 @@ main(int argc, char **argv)
                 break;
         }
     }
-
-    idata  = init_interface(dat);
+    init_interface(idata, scan);
 /*
  *    if ((scan.router_flag == 1) && (scan.ping_flag == 0) && (scan.arp_flag == 0))
  *    {

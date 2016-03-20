@@ -17,22 +17,19 @@
 struct _idata
 {
     char *iface;
+    char *iface_ip;
     int index;
-    u_int8_t *src_mac;
-    u_int8_t *dst_mac;
+    u_int8_t *iface_mac;
 };
 
 struct _scan
 {
-    char *dst_ip;
-    char *src_ip;
+    char *target;
+    char *port;
+    unsigned char *target_mac;
     int router_flag;
     int ping_flag;
-    u_int8_t *send_ether_frame;
-    u_int8_t *recv_ether_frame;
-    int ether_frame_len;
-    struct ip6_hdr *icmp_recv_ip_hdr;
-    struct icmp6_hdr *icmp_recv_icmp_hdr;
+    int arp_flag;
 };
 
 #endif
