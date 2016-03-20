@@ -13,12 +13,8 @@ struct _pktinfo6
 struct _neighbor
 {
     int recvadvert_flag;
-    u_int8_t *inpack;
-    u_int8_t *outpack;
-    u_int8_t *psdhdr;
-    u_int8_t hoplimit;
 };
 
-struct msghdr neighbor_solicit(struct _neighbor *, struct _idata *, struct _scan *);
+struct msghdr neighbor_solicit(struct _idata *, struct _scan *);
 
 #endif

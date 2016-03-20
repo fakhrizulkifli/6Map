@@ -39,8 +39,10 @@
 
 #include <netdb.h>
 #include <net/if.h>
+#include <netinet/ip.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <ifaddrs.h>
 
 #include <sys/socket.h>
 #include <sys/ioctl.h>
@@ -52,21 +54,9 @@
 #include "6map.h"
 
 int
-init_neighbor(struct _neighbor *neigh)
-{
-    neigh->inpack = malloc(sizeof(neigh->inpack));
-    neigh->outpack = malloc(sizeof(neigh->outpack));
-    neigh->psdhdr = malloc(sizeof(neigh->psdhdr));
-
-    memset(&neigh, 0, sizeof(neigh));
-    return 0;
-}
-
-int
 init_idata(struct _idata *idata)
 {
     idata->iface = malloc(sizeof(idata->iface));
-    idata->iface_ip = malloc(sizeof(idata->iface_ip));
     idata->iface_mac = malloc(sizeof(idata->iface_mac));
 
     memset(&idata, 0, sizeof(idata));
@@ -77,6 +67,7 @@ int
 init_scan(struct _scan *scan)
 {
     scan->target = malloc(sizeof(scan->target));
+    scan->port = malloc(sizeof(scan->port));
     scan->target_mac = malloc(sizeof(scan->target_mac));
 
     memset(&scan, 0, sizeof(scan));
@@ -86,9 +77,11 @@ init_scan(struct _scan *scan)
 int
 free_idata(struct _idata *idata)
 {
+    /*
+     * FIXME: Free unsigned char *iface_mac
+     */
     free(idata->iface);
     free(idata->iface_ip);
-    free(idata->iface_mac);
 
     return 0;
 }
@@ -97,17 +90,8 @@ int
 free_scan(struct _scan *scan)
 {
     free(scan->target);
+    free(scan->port);
     free(scan->target_mac);
-
-    return 0;
-}
-
-int
-free_neighbor(struct _neighbor *neigh)
-{
-    free(neigh->inpack);
-    free(neigh->outpack);
-    free(neigh->psdhdr);
 
     return 0;
 }
@@ -166,9 +150,15 @@ init_interface(struct _idata *idata, struct _scan *scan)
 {
     int i;
     int sd;
+    int ret;
+    char ip[INET6_ADDRSTRLEN];
     struct ifreq ifr;
+    struct sockaddr_in6 *info;
+    struct ifaddrs *addrs, *res;
 
     memset(&ifr, 0, sizeof(ifr));
+    memset(&info, 0, sizeof(info));
+    memset(&addrs, 0, sizeof(addrs));
     if ((sd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) < 0)
     {
         perror("Utils.socket");
@@ -188,18 +178,45 @@ init_interface(struct _idata *idata, struct _scan *scan)
         exit(EXIT_FAILURE);
     }
 
-    /*
-     * TODO: Get local interface IPv6 address
-     */
-    memcpy(&scan->target_mac, ifr.ifr_hwaddr.sa_data, sizeof(scan->target_mac));
-    scan->target_mac = (unsigned char *) &ifr.ifr_addr.sa_data;
+    if ((ret = getifaddrs(&addrs)) != 0)
+    {
+        perror("Utils.getifaddrs");
+        exit(EXIT_FAILURE);
+    }
+
+    for (res = addrs; res != NULL; res = res->ifa_next)
+    {
+        if (res->ifa_addr == NULL)
+            continue;
+
+        if ((res->ifa_flags & IFF_UP) == 0)
+            continue;
+
+        if (strncmp(res->ifa_name, idata->iface, strlen(idata->iface)) != 0)
+            continue;
+
+        if (res->ifa_addr->sa_family == AF_INET6)
+        {
+            info = (struct sockaddr_in6 *) res->ifa_addr;
+            if ((ret = inet_ntop(AF_INET6, &info->sin6_addr, ip, INET6_ADDRSTRLEN)) == NULL)
+            {
+                perror("Utils.inet_ntop"); /* FIXME: Detailed error output using __LINE__ */
+                exit(EXIT_FAILURE);
+            }
+            idata->iface_ip = strdup(ip);
+        }
+    }
+
+    memcpy(&idata->iface_mac, ifr.ifr_hwaddr.sa_data, sizeof(idata->iface_mac));
+    idata->iface_mac = (unsigned char *) &ifr.ifr_addr.sa_data;
     fprintf(stdout, "Interface: %s\n", idata->iface);
-    fprintf(stdout, "MAC Address: ");
+    fprintf(stdout, "Interface MAC Address: ");
     for (i = 0; i < 5; ++i)
     {
-        fprintf(stdout, "%02x:", scan->target_mac[i]);
+        fprintf(stdout, "%02x:", idata->iface_mac[i]);
     }
-    fprintf(stdout, "%02x\n", scan->target_mac[5]);
+    fprintf(stdout, "%02x\n", idata->iface_mac[5]);
+    fprintf(stdout, "Interface IP Address: %s\n", idata->iface_ip);
 
     fflush(stdout);
     return 0;

@@ -72,7 +72,7 @@ const struct option opts[] =
     {"interface", required_argument, 0, 'i'},
     {"ping", no_argument, 0, 'p'},
     {"target", required_argument, 0, 't'},
-    {"port", required_argument, 0, 'P'},
+    {"mac", required_argument, 0, 'm'},
     {"router", no_argument, 0, 'r'},
     {"arp", no_argument, 0, 'a'},
     {"version", no_argument, 0, 'V'},
@@ -89,9 +89,9 @@ usage()
     printf("-i, --iface\tinterface\n\t");
     printf("-t, --target\ttarget\n\t");
     printf("-p, --ping\tping-based port scan\n\t");
-    printf("-r, --router\trouter scan\n\t");
+    printf("-r, --router\trouter-based scan\n\t");
     printf("-a, --arp\tARP-based scan\n\t");
-    printf("-P, --port\tport\n\t");
+    printf("-m, --mac\ttarget MAC address\n\t");
     printf("-V, --version\tversion\n\t");
     printf("-v, --verbose\tverbose\n");
 }
@@ -145,90 +145,26 @@ sigint_handler(int sig)
  *}
  */
 
+/*
+ * FIXME: Don't know why local variable inpack won't get malloc
+ */
 int
-recv_neighbor_advert(struct _neighbor *neigh, struct _idata *idata)
+recv_neighbor_advert(struct _idata *idata)
 {
     int i;
     int sd;
-    int ret;
-    int len;
-    u_int8_t neigh_addr, *pkt;
-    struct nd_neighbor_advert *na;
+    int status;
+    u_int8_t *inpack;
+    u_int8_t *pkt;
     struct msghdr msghdr;
-    struct iovec iov[2];
     struct ifreq ifr;
 
-    neigh->inpack = allocate_ustrmem(IP_MAXPACKET);
+    inpack = allocate_ustrmem(IP_MAXPACKET);
 
-    memset(&iov, 0, sizeof(iov));
     memset(&msghdr, 0, sizeof(msghdr));
-
-    msghdr.msg_name = NULL;
-    msghdr.msg_namelen = 0;
-    iov[0].iov_base = (u_int8_t *) neigh->inpack;
-    iov[0].iov_len = IP_MAXPACKET;
-    msghdr.msg_iov = iov;
-    msghdr.msg_iovlen = 1;
-
-    msghdr.msg_control = allocate_ustrmem(IP_MAXPACKET);
-    msghdr.msg_controllen = IP_MAXPACKET * sizeof(u_int8_t);
-
-    if ((sd = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6)) < 0)
-    {
-        perror("RecvNeighAdvert.socket");
-        exit(EXIT_FAILURE);
-    }
-
-    memcpy(&ifr.ifr_name, &idata->iface, sizeof(ifr.ifr_name));
-    memcpy(&ifr.ifr_hwaddr.sa_data, &idata->iface_mac, sizeof(ifr.ifr_hwaddr.sa_data));
-    if (bind(sd, (struct sockaddr *) &ifr, sizeof(ifr)) != 0)
-    {
-        perror("RecvNeighAdvert.bind");
-        exit(EXIT_FAILURE);
-    }
-    /*
-     *if (setsockopt(sd, SOL_SOCKET, S0_BINDTODEVICE, (void *) &ifr, sizeof(struct ifreq)) < 0)
-     *{
-     *    perror("RecvNeighAdvert.SO_BINDTODEVICE");
-     *    exit(EXIT_FAILURE);
-     *}
-     */
-
-    // listening for incoming
-    na = (struct nd_neighbor_advert *) neigh->inpack;
-    while (na->nd_na_hdr.icmp6_type != ND_NEIGHBOR_ADVERT)
-    {
-        if ((len = recvmsg(sd, &msghdr, 0)) < 0)
-        {
-            perror("RecvNeighAdvert.recvmsg");
-            return(EXIT_FAILURE);
-        }
-    }
-
-    // data received
-    LOG(2, "Got a response!");
-
-    /* TODO: Recheck all memset/malloc sizeof() */
-    /* TODO: Recheck all the LOG and what should be printed without -v */
-    memcpy(&neigh_addr, &na->nd_na_target, sizeof(u_int8_t));
-    if ((ret = validate_ip_addr(neigh_addr)) == 0)
-    {
-        LOG(1, "Neighbor Solicited address: %s\n", &na->nd_na_target);
-        LOG(1, "Neighbor Solicited MAC address: ");
-
-        pkt = (u_int8_t *) neigh->inpack;
-        for (i = 2; i < 7; ++i)
-        {
-            LOG(1, "%02x:", pkt[sizeof(struct nd_neighbor_advert) + i]);
-        }
-        LOG(1, "%02x\n", pkt[sizeof(struct nd_neighbor_advert) + 7]);
-    }
-
-    close(sd);
-    free_neighbor(neigh);
-    free_idata(idata);
     return 0;
 }
+
 
 /*
  *int
@@ -250,11 +186,13 @@ send_neighbor_solicit(struct _idata *idata, struct _scan *scan)
 {
     int ret;
     int sd;
+    u_int8_t *test;
     struct _neighbor *neigh;
     struct msghdr msghdr;
 
+    test = allocate_ustrmem(IP_MAXPACKET);
     memset(&neigh, 0, sizeof(neigh));
-    msghdr = neighbor_solicit(neigh, idata, scan);
+    msghdr = neighbor_solicit(idata, scan);
 
     if ((sd = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6)) < 0)
     {
@@ -262,21 +200,22 @@ send_neighbor_solicit(struct _idata *idata, struct _scan *scan)
         exit(EXIT_FAILURE);
     }
 
-    /*
-     * FIXME: Address family not supported
-     */
     if ((sendmsg(sd, &msghdr, 0)) != -1)
     {
         perror("SendNeighSolicit.sendmsg");
         exit(EXIT_FAILURE);
     }
 
-    if ((ret = recv_neighbor_advert(neigh, idata)) != 0)
-    {
-        perror("SendNeighAdvert.recv_neighbor_advert");
-        exit(EXIT_FAILURE);
-    }
+    fprintf(stdout, "Neighbor Solicitation packet sent!\n");
+    /*
+     *if ((ret = recv_neighbor_advert(idata)) != 0)
+     *{
+     *    perror("SendNeighAdvert.recv_neighbor_advert");
+     *    exit(EXIT_FAILURE);
+     *}
+     */
 
+    fflush(stdout);
     return 0;
 }
 
@@ -316,7 +255,7 @@ main(int argc, char **argv)
         exit(EXIT_FAILURE);
     }
 
-    while ((ret = getopt_long(argc, argv, "hi:t:vVpP:ra", opts, NULL)) != -1)
+    while ((ret = getopt_long(argc, argv, "hi:t:vVpm:ra", opts, NULL)) != -1)
     {
         switch (ret)
         {
@@ -336,8 +275,8 @@ main(int argc, char **argv)
                 scan->ping_flag = 1;
                 break;
 
-            case 'P':
-                scan->port = strdup(optarg);
+            case 'm':
+                scan->target_mac = strdup(optarg);
                 break;
 
             case 'r':
@@ -383,5 +322,7 @@ main(int argc, char **argv)
      *    recv_neighbor_advert(idata, scan);
      */
 
+    free_idata(idata);
+    free_scan(scan);
     return EXIT_SUCCESS;
 }

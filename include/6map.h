@@ -19,14 +19,14 @@ struct _idata
     char *iface;
     char *iface_ip;
     int index;
-    u_int8_t *iface_mac;
+    unsigned char *iface_mac;
 };
 
 struct _scan
 {
     char *target;
     char *port;
-    unsigned char *target_mac;
+    char *target_mac;
     int router_flag;
     int ping_flag;
     int arp_flag;
