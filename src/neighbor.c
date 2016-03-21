@@ -56,7 +56,6 @@
 struct msghdr
 neighbor_solicit(struct _idata *idata, struct _scan *scan)
 {
-    int i;
     int cmsglen;
     int psdhdrlen;
     u_int8_t *psdhdr;
@@ -68,7 +67,7 @@ neighbor_solicit(struct _idata *idata, struct _scan *scan)
     struct iovec iov[2];
     struct cmsghdr *cmsghdr1, *cmsghdr2;
     int NS_HDRLEN = sizeof(struct nd_neighbor_solicit);
-    struct sockaddr_in6 *ipv6, src, dst, dstsnmc;
+    struct sockaddr_in6 src, dst;
 
     outpack = allocate_ustrmem(IP_MAXPACKET);
     psdhdr = allocate_ustrmem(IP_MAXPACKET);
@@ -77,40 +76,39 @@ neighbor_solicit(struct _idata *idata, struct _scan *scan)
     if (resolve_addr(idata->iface_ip) == 0)
     {
         memset(&src, 0, sizeof(src));
-        memcpy(&src, scan->target, sizeof(socklen_t));
-        memcpy(psdhdr, scan->target, 16 * sizeof(psdhdr));
+        memcpy(&src, idata->iface_ip, sizeof(src));
+        memcpy(psdhdr, src.sin6_addr.s6_addr, 16 * sizeof(psdhdr));
     }
 
     if (resolve_addr(scan->target) == 0)
     {
         memset(&dst, 0, sizeof(dst));
-        memset(&dstsnmc, 0, sizeof(dstsnmc));
-        memcpy(&dst, scan->target, sizeof(socklen_t));
-        memcpy(&dstsnmc, scan->target, sizeof(socklen_t));
+        memcpy(&dst, scan->target, sizeof(dst));
+        fprintf(stdout, "Target Address: %s\n", scan->target);
     }
 
-    fprintf(stdout, "Target Address: %s\n", scan->target);
-
-    dstsnmc.sin6_addr.s6_addr[0] = 255;
-    dstsnmc.sin6_addr.s6_addr[1] = 2;
-    for (i = 2; i < 11; ++i)
-    {
-        dstsnmc.sin6_addr.s6_addr[i] = 0;
-    }
-    dstsnmc.sin6_addr.s6_addr[11] = 1;
-    dstsnmc.sin6_addr.s6_addr[12] = 255;
-
-    /* FIXME: solicited-node address wrong calculation */
-    ipv6 = (struct sockaddr_in6 *) &dstsnmc;
-    //memset(scan->target, 0, INET6_ADDRSTRLEN * sizeof(scan->target));
-    if (inet_ntop(AF_INET6, &ipv6->sin6_addr, scan->target, INET6_ADDRSTRLEN) == NULL)
-    {
-        perror("Neighbor.inet_ntop");
-        exit(EXIT_FAILURE);
-    }
-
-    fprintf(stdout, "Target Multicast Address: %s\n", scan->target);
-    memcpy(psdhdr + 16, dstsnmc.sin6_addr.s6_addr, 16 * sizeof(psdhdr));
+/*
+ *    dstsnmc.sin6_addr.s6_addr[0] = 255;
+ *    dstsnmc.sin6_addr.s6_addr[1] = 2;
+ *    for (i = 2; i < 11; ++i)
+ *    {
+ *        dstsnmc.sin6_addr.s6_addr[i] = 0;
+ *    }
+ *    dstsnmc.sin6_addr.s6_addr[11] = 1;
+ *    dstsnmc.sin6_addr.s6_addr[12] = 255;
+ *
+ *    [> FIXME: solicited-node address wrong calculation <]
+ *    ipv6 = (struct sockaddr_in6 *) &dstsnmc;
+ *    //memset(scan->target, 0, INET6_ADDRSTRLEN * sizeof(scan->target));
+ *    if (inet_ntop(AF_INET6, &ipv6->sin6_addr, scan->target, INET6_ADDRSTRLEN) == NULL)
+ *    {
+ *        perror("Neighbor.inet_ntop");
+ *        exit(EXIT_FAILURE);
+ *    }
+ *
+ *    fprintf(stdout, "Target Multicast Address: %s\n", scan->target);
+ *    memcpy(psdhdr + 16, dstsnmc.sin6_addr.s6_addr, 16 * sizeof(psdhdr));
+ */
 
     ns = (struct nd_neighbor_solicit *) outpack;
     memset(ns, 0 ,sizeof(struct nd_neighbor_solicit));
@@ -122,11 +120,11 @@ neighbor_solicit(struct _idata *idata, struct _scan *scan)
 
     memcpy(outpack + NS_HDRLEN, &idata->iface_mac, 6 * sizeof(outpack));
 
-    psdhdrlen = 16 + 16 + 4 + 3 + 1 + NS_HDRLEN + 6;
+    psdhdrlen = 8 + 8 + 4 + 3 + 1 + NS_HDRLEN + 6;
 
     memset(&msghdr, 0, sizeof(msghdr));
-    msghdr.msg_name = &dstsnmc;
-    msghdr.msg_namelen = sizeof(dstsnmc);
+    msghdr.msg_name = &dst;
+    msghdr.msg_namelen = sizeof(dst);
     memset(&iov, 0, sizeof(struct iovec));
     iov[0].iov_base = (u_int8_t *) outpack;
     iov[0].iov_len = NS_HDRLEN + 6;

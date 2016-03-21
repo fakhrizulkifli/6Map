@@ -148,22 +148,24 @@ sigint_handler(int sig)
 /*
  * FIXME: Don't know why local variable inpack won't get malloc
  */
-int
-recv_neighbor_advert(struct _idata *idata)
-{
-    int i;
-    int sd;
-    int status;
-    u_int8_t *inpack;
-    u_int8_t *pkt;
-    struct msghdr msghdr;
-    struct ifreq ifr;
-
-    inpack = allocate_ustrmem(IP_MAXPACKET);
-
-    memset(&msghdr, 0, sizeof(msghdr));
-    return 0;
-}
+/*
+ *int
+ *recv_neighbor_advert(struct _idata *idata)
+ *{
+ *    int i;
+ *    int sd;
+ *    int status;
+ *    u_int8_t *inpack;
+ *    u_int8_t *pkt;
+ *    struct msghdr msghdr;
+ *    struct ifreq ifr;
+ *
+ *    inpack = allocate_ustrmem(IP_MAXPACKET);
+ *
+ *    memset(&msghdr, 0, sizeof(msghdr));
+ *    return 0;
+ *}
+ */
 
 
 /*
@@ -184,13 +186,11 @@ recv_neighbor_advert(struct _idata *idata)
 int
 send_neighbor_solicit(struct _idata *idata, struct _scan *scan)
 {
-    int ret;
+    //int ret;
     int sd;
-    u_int8_t *test;
     struct _neighbor *neigh;
     struct msghdr msghdr;
 
-    test = allocate_ustrmem(IP_MAXPACKET);
     memset(&neigh, 0, sizeof(neigh));
     msghdr = neighbor_solicit(idata, scan);
 
@@ -296,7 +296,7 @@ main(int argc, char **argv)
                 break;
         }
     }
-    init_interface(idata, scan);
+    init_interface(idata);
 /*
  *    if ((scan.router_flag == 1) && (scan.ping_flag == 0) && (scan.arp_flag == 0))
  *    {

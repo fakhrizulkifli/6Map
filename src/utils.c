@@ -146,7 +146,7 @@ resolve_addr(char *addr)
 }
 
 int
-init_interface(struct _idata *idata, struct _scan *scan)
+init_interface(struct _idata *idata)
 {
     int i;
     int sd;
