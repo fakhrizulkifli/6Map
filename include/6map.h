@@ -17,7 +17,8 @@
 struct _idata
 {
     char *iface;
-    char *iface_ip;
+    char *iface_ip6;
+    char *iface_ip4;
     int index;
     unsigned char *iface_mac;
 };

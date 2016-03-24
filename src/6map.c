@@ -43,6 +43,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <net/if.h>
+#include <net/ethernet.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <netinet/ip6.h>
@@ -60,6 +61,7 @@
 #include "6map.h"
 #include "logger.h"
 #include "neighbor.h"
+#include "arp.h"
 #include "utils.h"
 #include "icmp6.h"
 
@@ -138,12 +140,57 @@ sigint_handler(int sig)
  *}
  */
 
-/*
- *int
- *recv_arp_reply(struct _idata idata)
- *{
- *}
- */
+int
+recv_arp_reply()
+{
+    int i;
+    int sd;
+    int ret;
+    u_int8_t *ether_frame;
+    struct _arp *arp_hdr;
+
+    ether_frame = allocate_ustrmem(IP_MAXPACKET);
+    memset(&arp_hdr, 0, sizeof(arp_hdr));
+
+    if ((sd = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) < 0)
+    {
+        perror("RecvARP.socket");
+        exit(EXIT_FAILURE);
+    }
+
+    arp_hdr = (struct _arp *) (ether_frame + 6 + 6 + 2);
+
+    while ((((ether_frame[12] << 8) + ether_frame[13]) != ETH_P_ARP) || (ntohs(arp_hdr->opcode) != ARPOP_REPLY))
+    {
+        if ((ret = recv(sd, ether_frame, IP_MAXPACKET, 0)) < 0)
+        {
+            if (errno = EINTR)
+            {
+                memset(ether_frame, 0, IP_MAXPACKET * sizeof(ether_frame));
+                continue;
+            }
+            else
+            {
+                perror("RecvARP.recv");
+                exit(EXIT_FAILURE);
+            }
+        }
+    }
+
+    close(sd);
+
+    /*
+     * TODO: need to to convert this IP
+     */
+    printf("Someone's IP: %u.%u.%u.%u\n", arp_hdr->router_ip[0], arp_hdr->router_ip[1], arp_hdr->router_ip[2], arp_hdr->router_ip[3]);
+    printf("Someone's MAC: ");
+    for (i = 0; i < 5; ++i)
+    {
+        printf("%02x:", arp_hdr->router_mac[i]);
+    }
+    printf("%02x\n", arp_hdr->router_mac[5]);
+    return 0;
+}
 
 /*
  * FIXME: Don't know why local variable inpack won't get malloc
@@ -175,13 +222,37 @@ sigint_handler(int sig)
  *}
  */
 
-/*
- * @brief get the ipv4 address via arp, then send icmp6, if reply get the address
- *int
- *send_arp(struct _idata idata)
- *{
- *}
- */
+int
+send_arp(struct _idata *idata, struct _scan *scan)
+{
+    int sd;
+    int ret;
+    int hdr_len;
+    u_int8_t *hdr;
+    struct sockaddr_ll datalink;
+
+    memset(&datalink, 0, sizeof(datalink));
+
+    datalink.sll_family = AF_PACKET;
+    memcpy(datalink.sll_addr, idata->iface_mac, 4 * sizeof(datalink.sll_addr));
+    datalink.sll_halen = 0;
+
+    hdr_len = 6 + 6 + 2 + ARP_HDRLEN;
+    hdr = craft_arp_packet(idata, scan);
+    if ((sd = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) < 0)
+    {
+        perror("SendARP.socket");
+        exit(EXIT_FAILURE);
+    }
+
+    if ((ret = sendto(sd, hdr, hdr_len, 0, (struct sockaddr *) &datalink, sizeof(datalink))) <= 0)
+    {
+        perror("SendARP.sendto");
+        exit(EXIT_FAILURE);
+    }
+
+    return 0;
+}
 
 int
 send_neighbor_solicit(struct _idata *idata, struct _scan *scan)
@@ -297,6 +368,14 @@ main(int argc, char **argv)
         }
     }
     init_interface(idata);
+    int i;
+    for (i = 0; i < 5; ++i)
+    {
+        printf("%02x:", idata->iface_mac[i]);
+    }
+    printf("%02x\n", idata->iface_mac[5]);
+    send_arp(idata, scan);
+    exit(EXIT_FAILURE);
 /*
  *    if ((scan.router_flag == 1) && (scan.ping_flag == 0) && (scan.arp_flag == 0))
  *    {
@@ -314,9 +393,7 @@ main(int argc, char **argv)
  *    }
  */
 
-    if ((status = send_neighbor_solicit(idata, scan)) == 0)
-    {
-    }
+    //send_neighbor_solicit(idata, scan);
     /*
      *for (;;)
      *    recv_neighbor_advert(idata, scan);

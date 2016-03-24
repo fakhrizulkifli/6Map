@@ -12,7 +12,7 @@ $ sudo make install
 #### TODO
 ```Bash
 $ cd /path/to/6map
-$ grep -RE "TODO|FIXME" .
+$ grep -RE "TODO|FIXME|NOTE" .
 ```
 
 #### License

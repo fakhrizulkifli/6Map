@@ -57,6 +57,8 @@ int
 init_idata(struct _idata *idata)
 {
     idata->iface = malloc(sizeof(idata->iface));
+    idata->iface_ip6 = malloc(sizeof(idata->iface_ip6));
+    idata->iface_ip4 = malloc(sizeof(idata->iface_ip4));
     idata->iface_mac = malloc(sizeof(idata->iface_mac));
 
     memset(&idata, 0, sizeof(idata));
@@ -81,7 +83,8 @@ free_idata(struct _idata *idata)
      * FIXME: Free unsigned char *iface_mac
      */
     free(idata->iface);
-    free(idata->iface_ip);
+    free(idata->iface_ip6);
+    free(idata->iface_ip4);
 
     return 0;
 }
@@ -151,13 +154,16 @@ init_interface(struct _idata *idata)
     int i;
     int sd;
     int ret;
-    char ip[INET6_ADDRSTRLEN];
+    char ip6[INET6_ADDRSTRLEN];
+    char ip4[INET_ADDRSTRLEN];
     struct ifreq ifr;
-    struct sockaddr_in6 *info;
+    struct sockaddr_in6 *ipv6;
+    struct sockaddr_in *ipv4;
     struct ifaddrs *addrs, *res;
 
     memset(&ifr, 0, sizeof(ifr));
-    memset(&info, 0, sizeof(info));
+    memset(&ipv6, 0, sizeof(ipv6));
+    memset(&ipv4, 0, sizeof(ipv4));
     memset(&addrs, 0, sizeof(addrs));
     if ((sd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) < 0)
     {
@@ -195,15 +201,26 @@ init_interface(struct _idata *idata)
         if (strncmp(res->ifa_name, idata->iface, strlen(idata->iface)) != 0)
             continue;
 
-        if (res->ifa_addr->sa_family == AF_INET6)
+        if (res->ifa_addr->sa_family == AF_INET)
         {
-            info = (struct sockaddr_in6 *) res->ifa_addr;
-            if ((ret = inet_ntop(AF_INET6, &info->sin6_addr, ip, INET6_ADDRSTRLEN)) == NULL)
+            ipv4 = (struct sockaddr_in *) res->ifa_addr;
+            if ((ret = inet_ntop(AF_INET, &ipv4->sin_addr, ip4, INET_ADDRSTRLEN)) == NULL)
             {
-                perror("Utils.inet_ntop"); /* FIXME: Detailed error output using __LINE__ */
+                perror("Utils.inet_ntop4");
                 exit(EXIT_FAILURE);
             }
-            idata->iface_ip = strdup(ip);
+            idata->iface_ip4 = strdup(ip4);
+        }
+
+        if (res->ifa_addr->sa_family == AF_INET6)
+        {
+            ipv6 = (struct sockaddr_in6 *) res->ifa_addr;
+            if ((ret = inet_ntop(AF_INET6, &ipv6->sin6_addr, ip6, INET6_ADDRSTRLEN)) == NULL)
+            {
+                perror("Utils.inet_ntop6"); /* FIXME: Detailed error output using __LINE__ */
+                exit(EXIT_FAILURE);
+            }
+            idata->iface_ip6 = strdup(ip6);
         }
     }
 
@@ -216,7 +233,8 @@ init_interface(struct _idata *idata)
         fprintf(stdout, "%02x:", idata->iface_mac[i]);
     }
     fprintf(stdout, "%02x\n", idata->iface_mac[5]);
-    fprintf(stdout, "Interface IP Address: %s\n", idata->iface_ip);
+    fprintf(stdout, "Interface IPv4 Address: %s\n", idata->iface_ip4);
+    fprintf(stdout, "Interface IPv6 Address: %s\n", idata->iface_ip6);
 
     fflush(stdout);
     return 0;

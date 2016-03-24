@@ -73,10 +73,10 @@ neighbor_solicit(struct _idata *idata, struct _scan *scan)
     psdhdr = allocate_ustrmem(IP_MAXPACKET);
 
     fprintf(stdout, "Crafting Neighbor Solicitation packet...\n");
-    if (resolve_addr(idata->iface_ip) == 0)
+    if (resolve_addr(idata->iface_ip6) == 0)
     {
         memset(&src, 0, sizeof(src));
-        memcpy(&src, idata->iface_ip, sizeof(src));
+        memcpy(&src, idata->iface_ip6, sizeof(src));
         memcpy(psdhdr, src.sin6_addr.s6_addr, 16 * sizeof(psdhdr));
     }
 
