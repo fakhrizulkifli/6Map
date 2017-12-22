@@ -133,12 +133,10 @@ sigint_handler(int sig)
     exit(sig);
 }
 
-/*
- *int
- *recv_icmp(struct _scan scan)
- *{
- *}
- */
+int
+recv_icmp(struct _scan scan)
+{
+}
 
 int
 recv_arp_reply()
@@ -164,7 +162,7 @@ recv_arp_reply()
     {
         if ((ret = recv(sd, ether_frame, IP_MAXPACKET, 0)) < 0)
         {
-            if (errno = EINTR)
+            if (errno == EINTR)
             {
                 memset(ether_frame, 0, IP_MAXPACKET * sizeof(ether_frame));
                 continue;
@@ -192,35 +190,27 @@ recv_arp_reply()
     return 0;
 }
 
-/*
- * FIXME: Don't know why local variable inpack won't get malloc
- */
-/*
- *int
- *recv_neighbor_advert(struct _idata *idata)
- *{
- *    int i;
- *    int sd;
- *    int status;
- *    u_int8_t *inpack;
- *    u_int8_t *pkt;
- *    struct msghdr msghdr;
- *    struct ifreq ifr;
- *
- *    inpack = allocate_ustrmem(IP_MAXPACKET);
- *
- *    memset(&msghdr, 0, sizeof(msghdr));
- *    return 0;
- *}
- */
+int
+recv_neighbor_advert(struct _idata *idata)
+{
+    int i;
+    int sd;
+    int status;
+    u_int8_t *inpack;
+    u_int8_t *pkt;
+    struct msghdr msghdr;
+    struct ifreq ifr;
 
+    inpack = allocate_ustrmem(IP_MAXPACKET);
 
-/*
- *int
- *recv_router_advert(struct _router route)
- *{
- *}
- */
+    memset(&msghdr, 0, sizeof(msghdr));
+    return 0;
+}
+
+int
+recv_router_advert(struct _router route)
+{
+}
 
 int
 send_arp(struct _idata *idata, struct _scan *scan)
@@ -242,13 +232,13 @@ send_arp(struct _idata *idata, struct _scan *scan)
     if ((sd = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) < 0)
     {
         perror("SendARP.socket");
-        exit(EXIT_FAILURE);
+        return -1;
     }
 
     if ((ret = sendto(sd, hdr, hdr_len, 0, (struct sockaddr *) &datalink, sizeof(datalink))) <= 0)
     {
         perror("SendARP.sendto");
-        exit(EXIT_FAILURE);
+        return -1;
     }
 
     return 0;
@@ -257,7 +247,6 @@ send_arp(struct _idata *idata, struct _scan *scan)
 int
 send_neighbor_solicit(struct _idata *idata, struct _scan *scan)
 {
-    //int ret;
     int sd;
     struct _neighbor *neigh;
     struct msghdr msghdr;
@@ -268,42 +257,34 @@ send_neighbor_solicit(struct _idata *idata, struct _scan *scan)
     if ((sd = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6)) < 0)
     {
         perror("SendNeighSolicit.socket");
-        exit(EXIT_FAILURE);
+        return -1;
     }
 
     if ((sendmsg(sd, &msghdr, 0)) != -1)
     {
         perror("SendNeighSolicit.sendmsg");
-        exit(EXIT_FAILURE);
+        return -1;
     }
 
-    fprintf(stdout, "Neighbor Solicitation packet sent!\n");
-    /*
-     *if ((ret = recv_neighbor_advert(idata)) != 0)
-     *{
-     *    perror("SendNeighAdvert.recv_neighbor_advert");
-     *    exit(EXIT_FAILURE);
-     *}
-     */
+    LOG(0, "Neighbor Solicitation packet sent!\n");
+    if ((ret = recv_neighbor_advert(idata)) == -1)
+    {
+        perror("SendNeighAdvert.recv_neighbor_advert");
+        return -1;
+    }
 
-    fflush(stdout);
     return 0;
 }
 
-/*
- *int
- *send_router_solicit(struct _router route)
- *{
- *
- *}
- */
+int
+send_router_solicit(struct _router route)
+{
+}
 
-/*
- *int
- *send_icmp(struct _scan scan, u_int8_t port)
- *{
- *}
- */
+int
+send_icmp(struct _scan scan, u_int8_t port)
+{
+}
 
 int
 main(int argc, char **argv)
@@ -315,10 +296,9 @@ main(int argc, char **argv)
 
     signal(SIGINT, sigint_handler);
     signal(SIGSEGV, segfault_handler);
-    idata = malloc(sizeof *idata);
-    scan = malloc(sizeof *scan);
-    init_idata(idata);
-    init_scan(scan);
+
+    idata = (struct _idata *) malloc(sizeof(struct _idata));
+    scan = (struct _scan *) malloc(sizeof(struct _scan));
 
     if (argc < 2)
     {
@@ -335,11 +315,11 @@ main(int argc, char **argv)
                 exit(EXIT_FAILURE);
 
             case 'i':
-                idata->iface = strdup(optarg);
+                strncpy(idata->iface, optarg, sizeof(idata->iface) - 1);
                 break;
 
             case 't':
-                scan->target = strdup(optarg);
+                strncpy(scan->target, optarg, sizeof(scan->target) - 1);
                 break;
 
             case 'p':
@@ -347,7 +327,7 @@ main(int argc, char **argv)
                 break;
 
             case 'm':
-                scan->target_mac = strdup(optarg);
+                strncpy(scan->target_mac, optarg, sizeof(scan->target_mac) - 1);
                 break;
 
             case 'r':
@@ -367,39 +347,15 @@ main(int argc, char **argv)
                 break;
         }
     }
-    init_interface(idata);
-    int i;
-    for (i = 0; i < 5; ++i)
+
+    if ((idata = init_interface(idata)) == -1)
     {
-        printf("%02x:", idata->iface_mac[i]);
+        free(idata);
+        free(scan);
+        exit(EXIT_FAILURE);
     }
-    printf("%02x\n", idata->iface_mac[5]);
-    send_arp(idata, scan);
+
+    // NOTE: Not implemented yet
+    //send_arp(idata, scan);
     exit(EXIT_FAILURE);
-/*
- *    if ((scan.router_flag == 1) && (scan.ping_flag == 0) && (scan.arp_flag == 0))
- *    {
- *        send_router_solicit(idata, scan);
- *    }
- *
- *    if ((scan.router_flag == 0) && (scan.ping_flag == 1) && (scan.arp_flag == 0))
- *    {
- *        send_icmp(idata, scan);
- *    }
- *
- *    if ((scan.router_flag == 0) && (scan.ping_flag == 0) && (scan.arp_flag == 1))
- *    {
- *        send_arp(idata);
- *    }
- */
-
-    //send_neighbor_solicit(idata, scan);
-    /*
-     *for (;;)
-     *    recv_neighbor_advert(idata, scan);
-     */
-
-    free_idata(idata);
-    free_scan(scan);
-    return EXIT_SUCCESS;
 }

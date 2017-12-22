@@ -16,18 +16,18 @@
 
 struct _idata
 {
-    char *iface;
-    char *iface_ip6;
-    char *iface_ip4;
+    char iface[10];
+    char iface_ip6[50];
+    char iface_ip4[20];
     int index;
-    unsigned char *iface_mac;
+    char iface_mac[50];
 };
 
 struct _scan
 {
-    char *target;
-    char *port;
-    char *target_mac;
+    char target[50];
+    char port[5];
+    char target_mac[50];
     int router_flag;
     int ping_flag;
     int arp_flag;

@@ -56,22 +56,13 @@
 int
 init_idata(struct _idata *idata)
 {
-    idata->iface = malloc(sizeof(idata->iface));
-    idata->iface_ip6 = malloc(sizeof(idata->iface_ip6));
-    idata->iface_ip4 = malloc(sizeof(idata->iface_ip4));
-    idata->iface_mac = malloc(sizeof(idata->iface_mac));
-
-    memset(&idata, 0, sizeof(idata));
+    memset(&idata, 0, sizeof(struct _idata));
     return 0;
 }
 
 int
 init_scan(struct _scan *scan)
 {
-    scan->target = malloc(sizeof(scan->target));
-    scan->port = malloc(sizeof(scan->port));
-    scan->target_mac = malloc(sizeof(scan->target_mac));
-
     memset(&scan, 0, sizeof(scan));
     return 0;
 }
@@ -148,7 +139,7 @@ resolve_addr(char *addr)
     return 0;
 }
 
-int
+struct _idata *
 init_interface(struct _idata *idata)
 {
     int i;
@@ -161,33 +152,36 @@ init_interface(struct _idata *idata)
     struct sockaddr_in *ipv4;
     struct ifaddrs *addrs, *res;
 
-    memset(&ifr, 0, sizeof(ifr));
-    memset(&ipv6, 0, sizeof(ipv6));
-    memset(&ipv4, 0, sizeof(ipv4));
-    memset(&addrs, 0, sizeof(addrs));
+    memset(&ifr, 0, sizeof(struct ifreq));
+    memset(&ipv6, 0, sizeof(struct sockaddr_in6));
+    memset(&ipv4, 0, sizeof(struct sockaddr_in));
+    memset(&addrs, 0, sizeof(struct ifaddrs));
+
     if ((sd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) < 0)
     {
         perror("Utils.socket");
         exit(EXIT_FAILURE);
     }
 
+    DEBUG("DEBUG: %s:%s:%d %s\n", __FILE__, __func__, __LINE__, idata->iface);
     memcpy(ifr.ifr_name, idata->iface, sizeof(ifr.ifr_name));
+
     if (ioctl(sd, SIOCGIFHWADDR, &ifr) < 0)
     {
         perror("Utils.ioctl");
-        exit(EXIT_FAILURE);
+        return -1;
     }
 
     if ((idata->index = if_nametoindex(idata->iface)) == 0)
     {
         perror("Utils.if_nametoindex");
-        exit(EXIT_FAILURE);
+        return -1;
     }
 
     if ((ret = getifaddrs(&addrs)) != 0)
     {
         perror("Utils.getifaddrs");
-        exit(EXIT_FAILURE);
+        return -1;
     }
 
     for (res = addrs; res != NULL; res = res->ifa_next)
@@ -207,9 +201,9 @@ init_interface(struct _idata *idata)
             if ((ret = inet_ntop(AF_INET, &ipv4->sin_addr, ip4, INET_ADDRSTRLEN)) == NULL)
             {
                 perror("Utils.inet_ntop4");
-                exit(EXIT_FAILURE);
+                return -1;
             }
-            idata->iface_ip4 = strdup(ip4);
+            memcpy(idata->iface_ip4, ip4, sizeof(idata->iface_ip4) - 1);
         }
 
         if (res->ifa_addr->sa_family == AF_INET6)
@@ -217,27 +211,26 @@ init_interface(struct _idata *idata)
             ipv6 = (struct sockaddr_in6 *) res->ifa_addr;
             if ((ret = inet_ntop(AF_INET6, &ipv6->sin6_addr, ip6, INET6_ADDRSTRLEN)) == NULL)
             {
-                perror("Utils.inet_ntop6"); /* FIXME: Detailed error output using __LINE__ */
-                exit(EXIT_FAILURE);
+                perror("Utils.inet_ntop6");
+                return -1;
             }
-            idata->iface_ip6 = strdup(ip6);
+            memcpy(idata->iface_ip6, ip6, sizeof(idata->iface_ip6) - 1);
         }
     }
 
-    memcpy(&idata->iface_mac, ifr.ifr_hwaddr.sa_data, sizeof(idata->iface_mac));
-    idata->iface_mac = (unsigned char *) &ifr.ifr_addr.sa_data;
-    fprintf(stdout, "Interface: %s\n", idata->iface);
-    fprintf(stdout, "Interface MAC Address: ");
+    memcpy(idata->iface_mac, ifr.ifr_hwaddr.sa_data, sizeof(idata->iface_mac));
+
+    LOG(0, "Interface: %s\n", idata->iface);
+    LOG(0, "Interface MAC Address: ");
     for (i = 0; i < 5; ++i)
     {
         fprintf(stdout, "%02x:", idata->iface_mac[i]);
     }
     fprintf(stdout, "%02x\n", idata->iface_mac[5]);
-    fprintf(stdout, "Interface IPv4 Address: %s\n", idata->iface_ip4);
-    fprintf(stdout, "Interface IPv6 Address: %s\n", idata->iface_ip6);
+    LOG(0, "Interface IPv4 Address: %s\n", idata->iface_ip4);
+    LOG(0, "Interface IPv6 Address: %s\n", idata->iface_ip6);
 
-    fflush(stdout);
-    return 0;
+    return idata;
 }
 
 u_int16_t

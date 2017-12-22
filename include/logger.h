@@ -3,5 +3,6 @@
 
 void LOG(int level, const char *fmt, ...);
 void LOG_add_level(int level);
+void DEBUG(const char *fmt, ...);
 
 #endif

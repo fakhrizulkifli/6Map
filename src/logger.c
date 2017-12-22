@@ -68,3 +68,12 @@ LOG(int level, const char *fmt, ...)
     vLOG(level, fmt, marker);
     va_end(marker);
 }
+
+void
+DEBUG(const char *fmt, ...)
+{
+    va_list marker;
+    va_start(marker, fmt);
+    vfprintf(stderr, fmt, marker);
+    va_end(marker);
+}
