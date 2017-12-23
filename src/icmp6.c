@@ -72,11 +72,8 @@ send_icmp(struct _idata *idata, struct _scan *scan)
     icmphdr->icmp6_id = htons(5);
     icmphdr->icmp6_seq = htons(300);
 
-    datalen = 4;
-    data[0] = 'T';
-    data[1] = 'E';
-    data[2] = 'S';
-    data[3] = 'T';
+    datalen = 10;
+    memset(data, 0, sizeof(uint8_t) * datalen);
 
     memcpy(outpack + ICMP_HDRLEN, data, datalen);
 
