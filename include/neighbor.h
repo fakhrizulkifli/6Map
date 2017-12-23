@@ -15,6 +15,8 @@ struct _neighbor
     int recvadvert_flag;
 };
 
-struct msghdr neighbor_solicit(struct _idata *, struct _scan *);
+int neighbor_solicit(struct _idata *, struct _scan *);
+int recv_neighbor_advert(struct _idata *, struct _scan *);
+int neighbor_advert(struct _idata *, struct _scan *);
 
 #endif

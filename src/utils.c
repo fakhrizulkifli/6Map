@@ -20,43 +20,6 @@
 #include "neighbor.h"
 #include "6map.h"
 
-int
-init_idata(struct _idata *idata)
-{
-    memset(&idata, 0, sizeof(struct _idata));
-    return 0;
-}
-
-int
-init_scan(struct _scan *scan)
-{
-    memset(&scan, 0, sizeof(scan));
-    return 0;
-}
-
-int
-free_idata(struct _idata *idata)
-{
-    /*
-     * FIXME: Free unsigned char *iface_mac
-     */
-    free(idata->iface);
-    free(idata->iface_ip6);
-    free(idata->iface_ip4);
-
-    return 0;
-}
-
-int
-free_scan(struct _scan *scan)
-{
-    free(scan->target);
-    free(scan->port);
-    free(scan->target_mac);
-
-    return 0;
-}
-
 void *
 find_ancillary(struct msghdr *msg, int cmsg_type)
 {
@@ -85,33 +48,31 @@ validate_ip_addr(char *ip_addr)
     return 0;
 }
 
-int
+struct addrinfo *
 resolve_addr(char *addr)
 {
     int status;
     struct addrinfo hints, *res;
 
-    memset(&hints, 0, sizeof(hints));
+    memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family = AF_INET6;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = hints.ai_flags | AI_CANONNAME;
 
     if ((status = getaddrinfo(addr, NULL, &hints, &res)) != 0)
     {
-        perror("Utils.getaddrinfo");
-        exit(EXIT_FAILURE);
+        fprintf(stderr, "ERROR: %s:%d getaddrinfo() failed - %s\n", __func__, __LINE__, gai_strerror(status));
+        //perror("Utils.getaddrinfo");
+        return -1;
     }
 
-    freeaddrinfo(res);
-    return 0;
+    return res;
 }
 
 struct _idata *
 init_interface(struct _idata *idata)
 {
-    int i;
-    int sd;
-    int ret;
+    int i, sd, ret;
     char ip6[INET6_ADDRSTRLEN];
     char ip4[INET_ADDRSTRLEN];
     struct ifreq ifr;
@@ -124,6 +85,7 @@ init_interface(struct _idata *idata)
     memset(&ipv4, 0, sizeof(struct sockaddr_in));
     memset(&addrs, 0, sizeof(struct ifaddrs));
 
+    // TODO: free() all the pointers on exceptions
     if ((sd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) < 0)
     {
         perror("Utils.socket");

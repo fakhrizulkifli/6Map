@@ -28,7 +28,6 @@
 #include "6map.h"
 #include "logger.h"
 #include "neighbor.h"
-#include "arp.h"
 #include "utils.h"
 #include "icmp6.h"
 
@@ -43,7 +42,6 @@ const struct option opts[] =
     {"target", required_argument, 0, 't'},
     {"mac", required_argument, 0, 'm'},
     {"router", no_argument, 0, 'r'},
-    {"arp", no_argument, 0, 'a'},
     {"version", no_argument, 0, 'V'},
     {"verbose", no_argument, 0, 'v'},
     {NULL, 0, NULL, 0}
@@ -57,9 +55,8 @@ usage()
     printf("-h, --help\thelp\n\t");
     printf("-i, --iface\tinterface\n\t");
     printf("-t, --target\ttarget\n\t");
-    printf("-p, --ping\tping-based port scan\n\t");
+    printf("-p, --ping\tping-based scan\n\t");
     printf("-r, --router\trouter-based scan\n\t");
-    printf("-a, --arp\tARP-based scan\n\t");
     printf("-m, --mac\ttarget MAC address\n\t");
     printf("-V, --version\tversion\n\t");
     printf("-v, --verbose\tverbose\n");
@@ -101,156 +98,99 @@ sigint_handler(int sig)
 }
 
 int
-recv_icmp(struct _scan scan)
+send_neighbor_solicit(struct _idata *idata, struct _scan *scan)
 {
-}
-
-int
-recv_arp_reply()
-{
-    int i;
-    int sd;
     int ret;
-    u_int8_t *ether_frame;
-    struct _arp *arp_hdr;
 
-    ether_frame = allocate_ustrmem(IP_MAXPACKET);
-    memset(&arp_hdr, 0, sizeof(arp_hdr));
-
-    if ((sd = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) < 0)
+    if ((ret = neighbor_solicit(idata, scan)) == -1)
     {
-        perror("RecvARP.socket");
+        free(idata);
+        free(scan);
+        fprintf(stderr, "ERROR: %s:%d neighbor_solicit failed\n", __func__, __LINE__);
         exit(EXIT_FAILURE);
     }
 
-    arp_hdr = (struct _arp *) (ether_frame + 6 + 6 + 2);
-
-    while ((((ether_frame[12] << 8) + ether_frame[13]) != ETH_P_ARP) || (ntohs(arp_hdr->opcode) != ARPOP_REPLY))
-    {
-        if ((ret = recv(sd, ether_frame, IP_MAXPACKET, 0)) < 0)
-        {
-            if (errno == EINTR)
-            {
-                memset(ether_frame, 0, IP_MAXPACKET * sizeof(ether_frame));
-                continue;
-            }
-            else
-            {
-                perror("RecvARP.recv");
-                exit(EXIT_FAILURE);
-            }
-        }
-    }
-
-    close(sd);
-
-    /*
-     * TODO: need to to convert this IP
-     */
-    printf("Someone's IP: %u.%u.%u.%u\n", arp_hdr->router_ip[0], arp_hdr->router_ip[1], arp_hdr->router_ip[2], arp_hdr->router_ip[3]);
-    printf("Someone's MAC: ");
-    for (i = 0; i < 5; ++i)
-    {
-        printf("%02x:", arp_hdr->router_mac[i]);
-    }
-    printf("%02x\n", arp_hdr->router_mac[5]);
-    return 0;
-}
-
-int
-recv_neighbor_advert(struct _idata *idata)
-{
-    int i;
-    int sd;
-    int status;
-    u_int8_t *inpack;
-    u_int8_t *pkt;
-    struct msghdr msghdr;
-    struct ifreq ifr;
-
-    inpack = allocate_ustrmem(IP_MAXPACKET);
-
-    memset(&msghdr, 0, sizeof(msghdr));
-    return 0;
-}
-
-int
-recv_router_advert(struct _router route)
-{
-}
-
-int
-send_arp(struct _idata *idata, struct _scan *scan)
-{
-    int sd;
-    int ret;
-    int hdr_len;
-    u_int8_t *hdr;
-    struct sockaddr_ll datalink;
-
-    memset(&datalink, 0, sizeof(datalink));
-
-    datalink.sll_family = AF_PACKET;
-    memcpy(datalink.sll_addr, idata->iface_mac, 4 * sizeof(datalink.sll_addr));
-    datalink.sll_halen = 0;
-
-    hdr_len = 6 + 6 + 2 + ARP_HDRLEN;
-    hdr = craft_arp_packet(idata, scan);
-    if ((sd = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) < 0)
-    {
-        perror("SendARP.socket");
-        return -1;
-    }
-
-    if ((ret = sendto(sd, hdr, hdr_len, 0, (struct sockaddr *) &datalink, sizeof(datalink))) <= 0)
-    {
-        perror("SendARP.sendto");
-        return -1;
-    }
-
-    return 0;
-}
-
-int
-send_neighbor_solicit(struct _idata *idata, struct _scan *scan)
-{
-    int sd;
-    struct _neighbor *neigh;
-    struct msghdr msghdr;
-
-    memset(&neigh, 0, sizeof(neigh));
-    msghdr = neighbor_solicit(idata, scan);
-
-    if ((sd = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6)) < 0)
-    {
-        perror("SendNeighSolicit.socket");
-        return -1;
-    }
-
-    if ((sendmsg(sd, &msghdr, 0)) != -1)
-    {
-        perror("SendNeighSolicit.sendmsg");
-        return -1;
-    }
-
     LOG(0, "Neighbor Solicitation packet sent!\n");
-    if ((ret = recv_neighbor_advert(idata)) == -1)
+    if ((ret = recv_neighbor_advert(idata, scan)) == -1)
     {
-        perror("SendNeighAdvert.recv_neighbor_advert");
-        return -1;
+        free(idata);
+        free(scan);
+        fprintf(stderr, "ERROR: %s:%d recv_neighbor_advert failed\n",  __func__, __LINE__);
+        exit(EXIT_FAILURE);
     }
 
     return 0;
 }
 
 int
-send_router_solicit(struct _router route)
+send_router_solicit(struct _idata *idata, struct _scan *scan)
 {
+    int ret;
+
+    if ((ret = router_solicit(idata, scan)) == -1)
+    {
+        free(idata);
+        free(scan);
+        fprintf(stderr, "ERROR: %s:%d router_solicit failed\n", __func__, __LINE__);
+        exit(EXIT_FAILURE);
+    }
+
+    LOG(0, "Router Solicitation packet sent!\n");
+    if ((ret = recv_router_advert(idata)) == -1)
+    {
+        free(idata);
+        free(scan);
+        fprintf(stderr, "ERROR: %s:%d recv_router_advert failed\n", __func__, __LINE__);
+        exit(EXIT_FAILURE);
+    }
+
+    return 0;
 }
 
 int
-send_icmp(struct _scan scan, u_int8_t port)
+spoof_icmp(struct _idata *idata, struct _scan *scan)
 {
+    int ret;
+
+    if ((ret = send_icmp(idata, scan)) == -1)
+    {
+        free(idata);
+        free(scan);
+        fprintf(stderr, "ERROR: %s:%d send_icmp failed\n");
+        exit(EXIT_FAILURE);
+    }
+    return 0;
+}
+
+int
+spoof_router_advertisement(struct _idata *idata, struct _scan *scan)
+{
+    int ret;
+
+    if ((ret = router_advert(idata, scan)) == -1)
+    {
+        free(idata);
+        free(scan);
+        fprintf(stderr, "ERROR: %s:%d router_advert failed\n", __func__, __LINE__);
+        exit(EXIT_FAILURE);
+    }
+    return 0;
+}
+
+int
+spoof_neighbor_advertisement(struct _idata *idata, struct _scan *scan)
+{
+    int ret;
+
+    if ((ret = neighbor_advert(idata, scan)) == -1)
+    {
+        free(idata);
+        free(scan);
+        fprintf(stderr, "ERROR: %s:%d neighbor_advert failed", __func__, __LINE__);
+        exit(EXIT_FAILURE);
+    }
+
+    return 0;
 }
 
 int
@@ -273,7 +213,7 @@ main(int argc, char **argv)
         exit(EXIT_FAILURE);
     }
 
-    while ((ret = getopt_long(argc, argv, "hi:t:vVpm:ra", opts, NULL)) != -1)
+    while ((ret = getopt_long(argc, argv, "hi:t:vVpm:r", opts, NULL)) != -1)
     {
         switch (ret)
         {
@@ -322,7 +262,13 @@ main(int argc, char **argv)
         exit(EXIT_FAILURE);
     }
 
-    // NOTE: Not implemented yet
-    //send_arp(idata, scan);
+    //send_neighbor_solicit(idata, scan);
+    //send_router_solicit(idata, scan);
+    spoof_neighbor_advertisement(idata, scan);
+    //spoof_router_advertisement(idata, scan);
+    //spoof_icmp(idata, scan);
+
+    free(idata);
+    free(scan);
     exit(EXIT_FAILURE);
 }
