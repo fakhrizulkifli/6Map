@@ -29,8 +29,6 @@
 #include "logger.h"
 #include "neighbor.h"
 #include "utils.h"
-#include "icmp6.h"
-
 
 #define TRACE_SIZE 256
 
@@ -38,10 +36,9 @@ const struct option opts[] =
 {
     {"help", no_argument, 0, 'h'},
     {"interface", required_argument, 0, 'i'},
-    {"ping", no_argument, 0, 'p'},
     {"target", required_argument, 0, 't'},
-    {"mac", required_argument, 0, 'm'},
     {"router", no_argument, 0, 'r'},
+    {"neighbor", no_argument, 0, 'n'},
     {"version", no_argument, 0, 'V'},
     {"verbose", no_argument, 0, 'v'},
     {NULL, 0, NULL, 0}
@@ -54,10 +51,9 @@ usage()
     printf("OPTIONS:\n\t");
     printf("-h, --help\thelp\n\t");
     printf("-i, --iface\tinterface\n\t");
-    printf("-t, --target\ttarget\n\t");
-    printf("-p, --ping\tping-based scan\n\t");
-    printf("-r, --router\trouter-based scan\n\t");
-    printf("-m, --mac\ttarget MAC address\n\t");
+    printf("-t, --target\ttarget IPv6 address\n\t");
+    printf("-r, --router\trouter discovery mode\n\t");
+    printf("-n, --neigbor\tneighbor discovery mode\n\t");
     printf("-V, --version\tversion\n\t");
     printf("-v, --verbose\tverbose\n");
 }
@@ -66,7 +62,7 @@ void
 banner()
 {
     printf("6map v%s -- IPv6 Mapper\n", VERSION);
-    printf("Copyright (c) 2016 Fakhri Zulkifli\n");
+    printf("Copyright (c) 2017 Fakhri Zulkifli\n");
     printf("<mohdfakhrizulkifli at gmail dot com>\n");
 }
 
@@ -148,21 +144,6 @@ send_router_solicit(struct _idata *idata, struct _scan *scan)
 }
 
 int
-spoof_icmp(struct _idata *idata, struct _scan *scan)
-{
-    int ret;
-
-    if ((ret = send_icmp(idata, scan)) == -1)
-    {
-        free(idata);
-        free(scan);
-        fprintf(stderr, "ERROR: %s:%d send_icmp failed\n");
-        exit(EXIT_FAILURE);
-    }
-    return 0;
-}
-
-int
 spoof_router_advertisement(struct _idata *idata, struct _scan *scan)
 {
     int ret;
@@ -213,12 +194,12 @@ main(int argc, char **argv)
         exit(EXIT_FAILURE);
     }
 
-    while ((ret = getopt_long(argc, argv, "hi:t:vVpm:r", opts, NULL)) != -1)
+    while ((ret = getopt_long(argc, argv, "hi:t:vVm:rn", opts, NULL)) != -1)
     {
         switch (ret)
         {
             case 'h':
-                usage(argv);
+                usage();
                 exit(EXIT_FAILURE);
 
             case 'i':
@@ -229,20 +210,12 @@ main(int argc, char **argv)
                 strncpy(scan->target, optarg, sizeof(scan->target) - 1);
                 break;
 
-            case 'p':
-                scan->ping_flag = 1;
-                break;
-
-            case 'm':
-                strncpy(scan->target_mac, optarg, sizeof(scan->target_mac) - 1);
+            case 'n':
+                scan->neighbor_flag = 1;
                 break;
 
             case 'r':
                 scan->router_flag = 1;
-                break;
-
-            case 'a':
-                scan->arp_flag = 1;
                 break;
 
             case 'V':
@@ -252,7 +225,20 @@ main(int argc, char **argv)
             case 'v':
                 LOG_add_level(1);
                 break;
+
+            default:
+                usage();
+                exit(EXIT_FAILURE);
         }
+    }
+
+    if (isValidIPv6(scan->target) < 1)
+    {
+        free(idata);
+        free(scan);
+
+        usage();
+        exit(EXIT_FAILURE);
     }
 
     if ((idata = init_interface(idata)) == -1)

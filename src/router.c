@@ -128,7 +128,7 @@ router_solicit(struct _idata *idata, struct _scan *scan)
         }
     }
 
-    LOG(0, "Soliciting node's index for interface %s is %i\n", idata->iface, idata->index);
+    LOG(1, "Soliciting node's index for interface %s is %i\n", idata->iface, idata->index);
 
     rs = (struct nd_router_solicit *) outpack;
     memset(rs, 0, sizeof(struct nd_router_solicit));
@@ -181,7 +181,7 @@ router_solicit(struct _idata *idata, struct _scan *scan)
     memcpy(psdhdr + 40, outpack, (RS_HDRLEN + optlen) * sizeof(uint8_t));
     rs->nd_rs_hdr.icmp6_cksum = checksum((uint16_t *) psdhdr, psdhdrlen);
 
-    LOG(0, "Checksum: %x\n", ntohs(rs->nd_rs_hdr.icmp6_cksum));
+    LOG(1, "Checksum: %x\n", ntohs(rs->nd_rs_hdr.icmp6_cksum));
 
     if (sendmsg(sd, &msghdr, 0) < 0)
     {
@@ -250,7 +250,7 @@ recv_router_advert(struct _idata *idata, struct _scan *scan)
         return -1;
     }
 
-    LOG(0, "On this node, index for interface %s is %i\n", idata->iface, idata->index);
+    LOG(1, "On this node, index for interface %s is %i\n", idata->iface, idata->index);
 
     if ((ret = setsockopt(sd, SOL_SOCKET, SO_BINDTODEVICE, (void *) &ifr, sizeof(struct ifreq))) < 0)
     {
@@ -273,7 +273,7 @@ recv_router_advert(struct _idata *idata, struct _scan *scan)
     opt = find_ancillary(&msghdr, IPV6_HOPLIMIT);
     if (opt == NULL)
     {
-        fprintf(stderr, "ERROR: %s:%d unknown hop limit");
+        fprintf(stderr, "ERROR: %s:%d unknown hop limit", __func__, __LINE__);
         return -1;
     }
     hoplimit = *(int *) opt;
@@ -282,7 +282,7 @@ recv_router_advert(struct _idata *idata, struct _scan *scan)
     opt = find_ancillary(&msghdr, IPV6_PKTINFO);
     if (opt == NULL)
     {
-        fprintf(stderr, "ERROR: %s:%d unknown destination address\n");
+        fprintf(stderr, "ERROR: %s:%d unknown destination address\n", __func__, __LINE__);
         return -1;
     }
 
@@ -401,7 +401,7 @@ router_advert(struct _idata *idata, struct _scan *scan)
     }
     fprintf(stdout, "%02x\n", options[5+2]);
 
-    LOG(0, "Advertising node's index for interface %s is %i\n", idata->iface, idata->index);
+    LOG(1, "Advertising node's index for interface %s is %i\n", idata->iface, idata->index);
 
     ra = (struct nd_router_advert *) outpack;
     memset(ra, 0, sizeof(struct nd_router_advert));
@@ -457,7 +457,7 @@ router_advert(struct _idata *idata, struct _scan *scan)
     memcpy(psdhdr + 40, outpack, (RA_HDRLEN + optlen) * sizeof(uint8_t));
     ra->nd_ra_hdr.icmp6_cksum = checksum((uint16_t *) psdhdr, psdhdrlen);
 
-    LOG(0, "Checksum: %x\n", ntohs(ra->nd_ra_hdr.icmp6_cksum));
+    LOG(1, "Checksum: %x\n", ntohs(ra->nd_ra_hdr.icmp6_cksum));
 
     if ((sd = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6)) < 0)
     {

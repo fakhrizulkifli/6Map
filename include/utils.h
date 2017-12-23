@@ -4,6 +4,7 @@
 #include "neighbor.h"
 #include "6map.h"
 
+int isValidIPv6(char *);
 struct addrinfo *resolve_addr(char *);
 struct _idata *init_interface(struct _idata *);
 

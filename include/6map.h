@@ -29,8 +29,7 @@ struct _scan
     char port[5];
     char target_mac[50];
     int router_flag;
-    int ping_flag;
-    int arp_flag;
+    int neighbor_flag;
 };
 
 #endif

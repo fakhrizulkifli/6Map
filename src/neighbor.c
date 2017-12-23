@@ -42,7 +42,6 @@ neighbor_solicit(struct _idata *idata, struct _scan *scan)
     psdhdr = allocate_ustrmem(IP_MAXPACKET);
     options = allocate_ustrmem(optlen);
 
-
     LOG(0, "Crafting Neighbor Solicitation packet...\n");
 
     if ((res = resolve_addr(idata->iface_ip6)) == -1)
@@ -157,7 +156,7 @@ neighbor_solicit(struct _idata *idata, struct _scan *scan)
         }
     }
 
-    LOG(0, "Soliciting node's index for interface %s is %i\n", idata->iface, idata->index);
+    LOG(1, "Soliciting node's index for interface %s is %i\n", idata->iface, idata->index);
 
     ns = (struct nd_neighbor_solicit *) outpack;
     memset(ns, 0, sizeof(struct nd_neighbor_solicit));
@@ -212,7 +211,7 @@ neighbor_solicit(struct _idata *idata, struct _scan *scan)
     memcpy(psdhdr + 40, outpack, (NS_HDRLEN + optlen) * sizeof(uint8_t));
     ns->nd_ns_hdr.icmp6_cksum = checksum((uint16_t *) psdhdr, psdhdrlen);
 
-    LOG(0, "Checksum: %x\n", ntohs(ns->nd_ns_hdr.icmp6_cksum));
+    LOG(1, "Checksum: %x\n", ntohs(ns->nd_ns_hdr.icmp6_cksum));
 
     if (sendmsg(sd, &msghdr, 0) < 0)
     {
@@ -288,7 +287,7 @@ recv_neighbor_advert(struct _idata *idata, struct _scan *scan)
         return -1;
     }
 
-    LOG(0, "On this node, index for interface %s is %i\n", idata->iface, idata->index);
+    LOG(1, "On this node, index for interface %s is %i\n", idata->iface, idata->index);
 
     if (setsockopt(sd, SOL_SOCKET, SO_BINDTODEVICE, (void *) &ifr, sizeof(struct ifreq)) < 0)
     {
@@ -438,7 +437,7 @@ neighbor_advert(struct _idata *idata, struct _scan *scan)
     }
     fprintf(stdout, "%02x\n", options[5+2]);
 
-    LOG(0, "Advertising node's index for interface %s is %i\n", idata->iface, idata->index);
+    LOG(1, "Advertising node's index for interface %s is %i\n", idata->iface, idata->index);
 
     na = (struct nd_neighbor_advert *) outpack;
     memset(na, 0, sizeof(struct nd_neighbor_advert));
@@ -492,7 +491,7 @@ neighbor_advert(struct _idata *idata, struct _scan *scan)
     memcpy(psdhdr + 40, outpack, (NA_HDRLEN + optlen) * sizeof(uint8_t));
     na->nd_na_hdr.icmp6_cksum = checksum((uint16_t *) psdhdr, psdhdrlen);
 
-    LOG(0, "Checksum: %x\n", ntohs(na->nd_na_hdr.icmp6_cksum));
+    LOG(1, "Checksum: %x\n", ntohs(na->nd_na_hdr.icmp6_cksum));
 
     if ((sd = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6)) < 0)
     {

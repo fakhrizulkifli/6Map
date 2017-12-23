@@ -69,6 +69,14 @@ resolve_addr(char *addr)
     return res;
 }
 
+int
+isValidIPv6(char *ip6)
+{
+    struct in6_addr result;
+
+    return inet_pton(AF_INET6, ip6, &result);
+}
+
 struct _idata *
 init_interface(struct _idata *idata)
 {
@@ -88,28 +96,27 @@ init_interface(struct _idata *idata)
     // TODO: free() all the pointers on exceptions
     if ((sd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) < 0)
     {
-        perror("Utils.socket");
-        exit(EXIT_FAILURE);
+        fprintf(stderr, "ERROR: %s:%d socket failed\n", __func__, __LINE__);
+        return -1;
     }
 
-    DEBUG("DEBUG: %s:%s:%d %s\n", __FILE__, __func__, __LINE__, idata->iface);
     memcpy(ifr.ifr_name, idata->iface, sizeof(ifr.ifr_name));
 
     if (ioctl(sd, SIOCGIFHWADDR, &ifr) < 0)
     {
-        perror("Utils.ioctl");
+        fprintf(stderr, "ERROR: %s:%d ioctl failed\n", __func__, __LINE__);
         return -1;
     }
 
     if ((idata->index = if_nametoindex(idata->iface)) == 0)
     {
-        perror("Utils.if_nametoindex");
+        fprintf(stderr, "ERROR: %s:%d if_nametoindex failed\n", __func__, __LINE__);
         return -1;
     }
 
     if ((ret = getifaddrs(&addrs)) != 0)
     {
-        perror("Utils.getifaddrs");
+        fprintf(stderr, "ERROR: %s:%d getifaddrs failed\n", __func__, __LINE__);
         return -1;
     }
 
@@ -129,7 +136,7 @@ init_interface(struct _idata *idata)
             ipv4 = (struct sockaddr_in *) res->ifa_addr;
             if ((ret = inet_ntop(AF_INET, &ipv4->sin_addr, ip4, INET_ADDRSTRLEN)) == NULL)
             {
-                perror("Utils.inet_ntop4");
+                fprintf(stderr, "ERROR: %s:%d inet_ntop4 failed\n", __func__, __LINE__);
                 return -1;
             }
             memcpy(idata->iface_ip4, ip4, sizeof(idata->iface_ip4) - 1);
@@ -140,7 +147,7 @@ init_interface(struct _idata *idata)
             ipv6 = (struct sockaddr_in6 *) res->ifa_addr;
             if ((ret = inet_ntop(AF_INET6, &ipv6->sin6_addr, ip6, INET6_ADDRSTRLEN)) == NULL)
             {
-                perror("Utils.inet_ntop6");
+                fprintf(stderr, "ERROR: %s:%d inet_ntop6 failed\n", __func__, __LINE__);
                 return -1;
             }
             memcpy(idata->iface_ip6, ip6, sizeof(idata->iface_ip6) - 1);
@@ -149,15 +156,15 @@ init_interface(struct _idata *idata)
 
     memcpy(idata->iface_mac, ifr.ifr_hwaddr.sa_data, sizeof(idata->iface_mac));
 
-    LOG(0, "Interface: %s\n", idata->iface);
-    LOG(0, "Interface MAC Address: ");
+    LOG(2, "Interface: %s\n", idata->iface);
+    LOG(2, "Interface MAC Address: ");
     for (i = 0; i < 5; ++i)
     {
-        fprintf(stdout, "%02x:", idata->iface_mac[i]);
+        LOG(2, "%02x:", idata->iface_mac[i]);
     }
-    fprintf(stdout, "%02x\n", idata->iface_mac[5]);
-    LOG(0, "Interface IPv4 Address: %s\n", idata->iface_ip4);
-    LOG(0, "Interface IPv6 Address: %s\n", idata->iface_ip6);
+    LOG(2, "%02x\n", idata->iface_mac[5]);
+    LOG(2, "Interface IPv4 Address: %s\n", idata->iface_ip4);
+    LOG(2, "Interface IPv6 Address: %s\n", idata->iface_ip6);
 
     return idata;
 }
