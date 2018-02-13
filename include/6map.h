@@ -14,13 +14,21 @@
 #define ALL_DHCP_SERVERS_MULTICAST_ADDR "FF05::1:3"
 #define ALL_LLMNR_MULTICAST_ADDR "FF02::1:3"
 
+#define SPOOF_NEIGHBOR_ADVERT   (0x1)
+#define SPOOF_ROUTER_ADVERT     (0x2)
+#define SEND_ROUTER_SOLICIT     (0x4)
+#define SEND_NEIGHBOR_SOLICIT   (0x8)
+#define SPOOF_ENABLED           (0x16)
+
+#define TRACE_SIZE  256
+
 struct _idata
 {
     char iface[10];
     char iface_ip6[50];
     char iface_ip4[20];
-    int index;
     char iface_mac[50];
+    int index;
 };
 
 struct _scan
@@ -28,8 +36,6 @@ struct _scan
     char target[50];
     char port[5];
     char target_mac[50];
-    int router_flag;
-    int neighbor_flag;
 };
 
 #endif

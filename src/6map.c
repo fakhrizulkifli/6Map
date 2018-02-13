@@ -30,8 +30,6 @@
 #include "neighbor.h"
 #include "utils.h"
 
-#define TRACE_SIZE 256
-
 const struct option opts[] =
 {
     {"help", no_argument, 0, 'h'},
@@ -39,6 +37,7 @@ const struct option opts[] =
     {"target", required_argument, 0, 't'},
     {"router", no_argument, 0, 'r'},
     {"neighbor", no_argument, 0, 'n'},
+    {"spoof", no_argument, 0, 's'},
     {"version", no_argument, 0, 'V'},
     {"verbose", no_argument, 0, 'v'},
     {NULL, 0, NULL, 0}
@@ -54,6 +53,7 @@ usage()
     printf("-t, --target\ttarget IPv6 address\n\t");
     printf("-r, --router\trouter discovery mode\n\t");
     printf("-n, --neigbor\tneighbor discovery mode\n\t");
+    printf("-s, --spoof\tspoof advertisement mode\n\t");
     printf("-V, --version\tversion\n\t");
     printf("-v, --verbose\tverbose\n");
 }
@@ -174,11 +174,31 @@ spoof_neighbor_advertisement(struct _idata *idata, struct _scan *scan)
     return 0;
 }
 
+void
+dispatcher(int opt, struct _idata *idata, struct _scan *scan)
+{
+    if (opt & SPOOF_NEIGHBOR_ADVERT)
+        spoof_neighbor_advertisement(idata, scan);
+
+    if (opt & SPOOF_ROUTER_ADVERT)
+        spoof_router_advertisement(idata, scan);
+
+    if (opt & SEND_ROUTER_SOLICIT)
+        send_router_solicit(idata, scan);
+
+    if (opt & SEND_NEIGHBOR_SOLICIT)
+        send_neighbor_solicit(idata, scan);
+}
+
 int
 main(int argc, char **argv)
 {
     int ret;
     int status;
+    int router_flag = 0;
+    int neighbor_flag = 0;
+    int spoof_flag = 0;
+
     struct _idata *idata;
     struct _scan *scan;
 
@@ -194,7 +214,7 @@ main(int argc, char **argv)
         exit(EXIT_FAILURE);
     }
 
-    while ((ret = getopt_long(argc, argv, "hi:t:vVm:rn", opts, NULL)) != -1)
+    while ((ret = getopt_long(argc, argv, "hi:t:vVm:rns", opts, NULL)) != -1)
     {
         switch (ret)
         {
@@ -211,11 +231,15 @@ main(int argc, char **argv)
                 break;
 
             case 'n':
-                scan->neighbor_flag = 1;
+                neighbor_flag = SEND_NEIGHBOR_SOLICIT;
                 break;
 
             case 'r':
-                scan->router_flag = 1;
+                router_flag = SEND_ROUTER_SOLICIT;
+                break;
+
+            case 's':
+                spoof_flag = SPOOF_ENABLED;
                 break;
 
             case 'V':
@@ -248,11 +272,10 @@ main(int argc, char **argv)
         exit(EXIT_FAILURE);
     }
 
-    //send_neighbor_solicit(idata, scan);
-    //send_router_solicit(idata, scan);
-    spoof_neighbor_advertisement(idata, scan);
-    //spoof_router_advertisement(idata, scan);
-    //spoof_icmp(idata, scan);
+    if (spoof_flag & SPOOF_ENABLED)
+        dispatcher((router_flag ? SPOOF_ROUTER_ADVERT : 0) | (neighbor_flag ? SPOOF_NEIGHBOR_ADVERT : 0), idata, scan);
+    else
+        dispatcher((router_flag) | (neighbor_flag), idata, scan);
 
     free(idata);
     free(scan);
